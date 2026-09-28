@@ -6,10 +6,20 @@ shown by the web app and CLI.
 
 The mobile screen supports:
 
-- Today's open and overdue tasks, including undated tasks
-- An all tasks view where completed tasks can be reopened
-- Quick task entry with optional `YYYY-MM-DD` due date and priority
-- Complete, reopen, and refresh actions with loading and connection errors
+- A daily breakdown with previous/next day buttons, a `YYYY-MM-DD` date field,
+  and a Today shortcut. Dated tasks appear on their scheduled day; undated inbox
+  tasks stay visible. Completed occurrences remain visible so they can be reopened.
+- Task entry with an optional `HH:MM` start time, expected duration in minutes,
+  and priority. Start times use the local 24-hour clock. A start time needs a date;
+  durations may be 1–1440 minutes, or left blank.
+- Recurrence choices: daily, weekdays, weekly, and monthly. The task date anchors
+  the series, and completing an occurrence leaves future occurrences open.
+  Monthly tasks fall on the last day of shorter months when needed.
+- Time ranges and total planned/remaining minutes. Day totals exclude undated
+  inbox estimates; All tasks totals include every displayed task.
+- An All tasks view with each recurring task's next occurrence on or after the
+  selected date, plus complete, reopen, and refresh actions.
+- Loading and connection errors, with stale responses ignored when switching days.
 
 ## Run
 
