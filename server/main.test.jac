@@ -113,7 +113,8 @@ test "invalid task input does not create stored work" {
             {"title": "Bad date", "due_date": "2026-02-30"},
             {"title": "Bad priority", "priority": "urgent"},
             {"title": "Bad time", "due_date": "2026-10-01", "start_time": "9:00"},
-            {"title": "Bad time", "due_date": "2026-10-01", "start_time": "24:00"},
+            {"title": "Bad time", "due_date": "2026-10-01", "start_time": "24:01"},
+            {"title": "Bad time", "due_date": "2026-10-01", "start_time": "25:00"},
             {"title": "Bad time", "due_date": "2026-10-01", "start_time": "10:60"},
             {"title": "No time date", "start_time": "09:00"},
             {"title": "No repeat date", "recurrence": "daily"},
@@ -131,6 +132,24 @@ test "invalid task input does not create stored work" {
         assert client.post("/function/list_tasks", json={}).data["result"] == [];
         assert not client.post("/function/day_plan", json={"plan_date": "2026-02-30"}).ok;
         assert not client.post("/function/list_tasks", json={"plan_date": "20260201"}).ok;
+    } finally {
+        client.close();
+    }
+}
+
+test "start times preserve the inclusive day boundaries in order" {
+    os.environ["PLANNER_DB_PATH"] = os.path.join(tempfile.mkdtemp(), "planner.sqlite3");
+    client = JacTestClient.from_file(SERVER, base_path=tempfile.mkdtemp());
+    try {
+        for time in ["24:00", "00:00", "23:59", "09:07"] {
+            response = client.post("/function/add_task", json={
+                "title": "At " + time, "due_date": "2026-10-01", "start_time": time
+            });
+            assert response.ok;
+            assert response.data["result"]["start_time"] == time;
+        }
+        tasks = client.post("/function/day_plan", json={"plan_date": "2026-10-01"}).data["result"];
+        assert [task["start_time"] for task in tasks] == ["00:00", "09:07", "23:59", "24:00"];
     } finally {
         client.close();
     }
@@ -155,6 +174,7 @@ test "migration preserves existing task IDs and completion without duplicate col
             assert task["done"] is True and task["due_date"] == "2026-10-01";
             assert task["recurrence"] == "none" and task["occurrence_date"] == "2026-10-01";
             assert task["start_time"] == "" and task["duration_minutes"] == 0;
+            assert task["item_type"] == "task" and task["due_time"] == "";
         }
         created = client.post("/function/add_task", json={
             "title": "New task", "due_date": "2026-10-02", "start_time": "09:30",
@@ -219,7 +239,7 @@ test "simultaneous app connections serialize the legacy migration" {
     conn = sqlite3.connect(path);
     try {
         columns = [row[1] for row in conn.execute("PRAGMA table_info(tasks)")];
-        assert columns == ["id", "title", "due_date", "priority", "done", "start_time", "duration_minutes", "recurrence"];
+        assert columns == ["id", "title", "due_date", "priority", "done", "start_time", "duration_minutes", "recurrence", "item_type", "due_time"];
     } finally { conn.close(); }
 }
 
@@ -309,4 +329,48 @@ test "today returns one current recurring occurrence and completion defaults to 
         tomorrow = (today + datetime.timedelta(days=1)).isoformat();
         assert client.post("/function/day_plan", json={"plan_date": tomorrow}).data["result"][0]["done"] is False;
     } finally { client.close(); }
+}
+
+test "deadlines persist and reminders retain overdue goals until completion" {
+    os.environ["PLANNER_DB_PATH"] = os.path.join(tempfile.mkdtemp(), "planner.sqlite3");
+    task = add_task("Study", "2026-10-01", duration_minutes=45);
+    late = add_task("Submit project", "2026-10-03", item_type="deadline", due_time="17:00");
+    all_day = add_task("Finish reading", "2026-10-01", item_type="deadline");
+    early = add_task("Upload assignment", "2026-10-01", item_type="deadline", due_time="09:30");
+    assert early.start_time == "" and early.duration_minutes == 0;
+    assert early.due_time == "09:30" and early.item_type == "deadline";
+    assert [item.id for item in deadline_reminders()] == [early.id, all_day.id, late.id];
+    assert sum(item.duration_minutes for item in day_plan("2026-10-01")) == 45;
+    # Each call reopens the database; fields and completion survive connection changes.
+    restored = [item for item in list_tasks("2027-01-01") if item.id == early.id][0];
+    assert restored.due_time == "09:30" and restored.item_type == "deadline";
+    assert len(deadline_reminders()) == 3;
+    set_done(early.id, True, "2026-10-01");
+    assert [item.id for item in deadline_reminders()] == [all_day.id, late.id];
+    set_done(early.id, False, "2026-10-01");
+    assert deadline_reminders()[0].id == early.id;
+    assert delete_task(early.id);
+    assert [item.id for item in deadline_reminders()] == [all_day.id, late.id];
+    assert task.id not in [item.id for item in deadline_reminders()];
+}
+
+test "deadline validation rejects missing dates and scheduled work fields" {
+    os.environ["PLANNER_DB_PATH"] = os.path.join(tempfile.mkdtemp(), "planner.sqlite3");
+    for fields in [
+        {"item_type": "deadline"},
+        {"item_type": "unknown", "due_date": "2026-10-01"},
+        {"item_type": "deadline", "due_date": "2026-10-01", "due_time": "24:01"},
+        {"item_type": "deadline", "due_date": "2026-10-01", "start_time": "09:00"},
+        {"item_type": "deadline", "due_date": "2026-10-01", "duration_minutes": 30},
+        {"item_type": "deadline", "due_date": "2026-10-01", "recurrence": "daily"},
+        {"due_date": "2026-10-01", "due_time": "17:00"}
+    ] {
+        rejected = False;
+        try { add_task("Invalid", **fields); }
+        except ValueError { rejected = True; }
+        assert rejected, str(fields);
+    }
+    assert list_tasks() == [];
+    midnight = add_task("End of day", "2026-10-01", item_type="deadline", due_time="24:00");
+    assert deadline_reminders()[0].due_time == midnight.due_time == "24:00";
 }

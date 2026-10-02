@@ -21,6 +21,7 @@ def repeatLabel(value: str) -> str {
 }
 
 def timeLabel(task: TaskView) -> str {
+    if task.item_type == "deadline" { return "Due " + (task.due_time or "end of day"); }
     if not task.start_time { return "Any time"; }
     if not task.duration_minutes { return task.start_time; }
     parts = task.start_time.split(":");
@@ -31,8 +32,19 @@ def timeLabel(task: TaskView) -> str {
         str(endMinute).zfill(2) + (" (+1 day)" if endMinutes >= 1440 else "");
 }
 
+def reminderStatus(task: TaskView) -> str {
+    due = new(Date, task.due_date + "T" + (task.due_time or "24:00") + ":00");
+    now = new(Date);
+    if due.getTime() <= now.getTime() { return "Overdue"; }
+    today = str(now.getFullYear()) + "-" + str(now.getMonth() + 1).zfill(2) + "-" + str(now.getDate()).zfill(2);
+    return "Due today" if task.due_date == today else "Upcoming";
+}
+
 def:pub HomeScreen(
     tasks: list[TaskView],
+    reminders: list[TaskView],
+    itemType: str,
+    onItemType: Callable[[str], None],
     view: str,
     selectedDay: str,
     dayInput: str,
@@ -154,7 +166,17 @@ def:pub HomeScreen(
         </View>
 
         <View style={styles.composerCard}>
-            <Text style={styles.sectionLabel}>ADD A TASK</Text>
+            <Text style={styles.sectionLabel}>{"ADD A DEADLINE / GOAL" if itemType == "deadline" else "ADD A TASK"}</Text>
+            <View style={styles.priorityRow}>
+                {for kind in ["task", "deadline"] {
+                    <Pressable accessibilityRole="button" key={kind}
+                        accessibilityState={{"selected": itemType == kind}}
+                        style={[styles.priorityChoice, styles.prioritySelected if itemType == kind else None]}
+                        onPress={lambda { onItemType(kind); }}>
+                        <Text style={styles.priorityChoiceText}>{"Scheduled task" if kind == "task" else "Deadline / goal"}</Text>
+                    </Pressable>
+                }}
+            </View>
             <TextInput
                 style={styles.input}
                 accessibilityLabel="Task title"
@@ -165,12 +187,12 @@ def:pub HomeScreen(
                 onSubmitEditing={onAdd}
                 returnKeyType="done"
             />
-            <Text style={styles.fieldLabel}>Date / first occurrence</Text>
+            <Text style={styles.fieldLabel}>{"Due date (required)" if itemType == "deadline" else "Date / first occurrence"}</Text>
             <TextInput
                 style={styles.input}
-                accessibilityLabel="Task date or first occurrence"
+                accessibilityLabel={"Deadline due date" if itemType == "deadline" else "Task date or first occurrence"}
                 value={dueDate}
-                placeholder="Due date: YYYY-MM-DD (optional)"
+                placeholder={"YYYY-MM-DD" if itemType == "deadline" else "Due date: YYYY-MM-DD (optional)"}
                 placeholderTextColor={C.muted}
                 onChangeText={onDueDate}
                 autoCapitalize="none"
@@ -178,10 +200,10 @@ def:pub HomeScreen(
             />
             <View style={styles.scheduleFields}>
                 <View style={styles.scheduleField}>
-                    <Text style={styles.fieldLabel}>Start time (24-hour)</Text>
+                    <Text style={styles.fieldLabel}>{"Due time (24-hour)" if itemType == "deadline" else "Start time (24-hour)"}</Text>
                     <TextInput
                         style={styles.input}
-                        accessibilityLabel="Start time (HH:MM)"
+                        accessibilityLabel={"Due time (HH:MM)" if itemType == "deadline" else "Start time (HH:MM)"}
                         value={startTime}
                         placeholder="HH:MM (optional)"
                         placeholderTextColor={C.muted}
@@ -190,7 +212,7 @@ def:pub HomeScreen(
                         maxLength={5}
                     />
                 </View>
-                <View style={styles.scheduleField}>
+                {if itemType == "task" { <View style={styles.scheduleField}>
                     <Text style={styles.fieldLabel}>Duration (minutes)</Text>
                     <TextInput
                         style={styles.input}
@@ -202,8 +224,9 @@ def:pub HomeScreen(
                         keyboardType="number-pad"
                         maxLength={4}
                     />
-                </View>
+                </View> }}
             </View>
+            {if itemType == "task" { <View style={styles.dayCard}>
             <Text style={styles.fieldLabel}>Repeat</Text>
             <View style={styles.priorityRow}>
                 {for option in ["none", "daily", "weekdays", "weekly", "monthly"] {
@@ -226,6 +249,9 @@ def:pub HomeScreen(
                     Complete each occurrence separately. The next one stays on your plan.
                 </Text>
             }}
+            </View> } else {
+                <Text style={styles.hint}>Leave the time blank for an end-of-day deadline. Goals stay in reminders until completed and do not add to planned minutes.</Text>
+            }}
             <View style={styles.priorityRow}>
                 <Text style={styles.priorityLabel}>Priority</Text>
                 {for level in ["low", "medium", "high"] {
@@ -243,7 +269,7 @@ def:pub HomeScreen(
                 }}
             </View>
             <Button
-                label={"Adding…" if working else "Add task"}
+                label={"Adding…" if working else "Add deadline / goal" if itemType == "deadline" else "Add task"}
                 onPress={onAdd}
                 disabled={working or not draft.strip()}
             />
@@ -257,6 +283,34 @@ def:pub HomeScreen(
                 </Pressable>
             </View>
         }}
+
+        <View style={styles.composerCard}>
+            <View style={styles.listHeader}>
+                <Text style={styles.sectionTitle}>Deadline reminders</Text>
+                <Pressable accessibilityRole="button" onPress={onRefresh} disabled={working or loading}>
+                    <Text style={styles.refreshText}>Refresh</Text>
+                </Pressable>
+            </View>
+            {if loading {
+                <Text style={styles.hint}>Loading reminders…</Text>
+            } elif not reminders {
+                <Text style={styles.hint}>No open deadlines. Add a deadline or goal above.</Text>
+            } else {
+                for task in reminders {
+                    <View key={task.id} style={styles.row}>
+                        <View style={styles.taskBody}>
+                            <Text style={styles.taskTitle}>{task.title}</Text>
+                            <Text style={styles.taskMeta}>{task.due_date + " · " + (task.due_time or "End of day")}</Text>
+                            <Text style={styles.taskTime}>{reminderStatus(task)}</Text>
+                        </View>
+                        <Pressable accessibilityRole="button" accessibilityLabel={"Complete deadline " + task.title}
+                            disabled={working} onPress={lambda { onToggle(task.id, False, task.due_date); }}>
+                            <Text style={styles.rowAction}>Done</Text>
+                        </Pressable>
+                    </View>
+                }
+            }}
+        </View>
 
         <View style={styles.listHeader}>
             <View>
@@ -319,7 +373,7 @@ def:pub HomeScreen(
                                 {(task.occurrence_date or task.due_date or "Inbox") + " · " + task.priority + " priority"}
                             </Text>
                             <Text style={styles.taskMeta}>
-                                {(str(task.duration_minutes) + " min" if task.duration_minutes else "No duration") +
+                                {("Deadline / goal" if task.item_type == "deadline" else str(task.duration_minutes) + " min" if task.duration_minutes else "No duration") +
                                     (" · " + repeatLabel(task.recurrence) if task.recurrence != "none" else "")}
                             </Text>
                         </View>

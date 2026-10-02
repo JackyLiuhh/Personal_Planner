@@ -37,6 +37,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 
 .list-card, .form-card { border: 1px solid #e5e9e2; border-radius: 22px; background: #fff; box-shadow: 0 6px 30px rgba(32, 61, 43, .035); }
 .list-card { overflow: hidden; min-height: 320px; }
+.reminder-card { min-height: 0; border-color: #e9dcc0; background: #fffdf8; }
+.reminder-empty { padding: 8px 30px 24px; margin: 0; color: #718477; font-size: 13px; line-height: 1.6; }
+.deadline-status { color: #966b27; font-weight: 700; }
+.deadline-status[data-overdue="true"] { color: #b4483b; }
 .list-head { display: flex; align-items: center; justify-content: space-between; padding: 29px 30px 18px; }
 .list-head .eyebrow { margin-bottom: 6px; }
 .list-head h2, .form-card h2 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 29px; line-height: 1.2; letter-spacing: -.03em; }
@@ -75,6 +79,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .form-card input:focus, .form-card select:focus { border-color: #6cae7e; box-shadow: 0 0 0 3px #e6f2e8; }
 .form-card input::placeholder { color: #a6b0a7; }
 .form-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.time-fields { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 4px; }
+.form-card .time-fields select { min-width: 0; padding: 0 5px; }
+.time-fields select:disabled { color: #87958a; background: #f5f7f4; }
 .submit-button { width: 100%; min-height: 43px; margin-top: 24px; border: 0; border-radius: 9px; background: #397b53; color: #fff; font-size: 13px; font-weight: 750; box-shadow: 0 5px 12px rgba(49, 117, 75, .16); }
 .submit-button:hover { background: #2f6847; }
 .submit-button:disabled { opacity: .55; cursor: not-allowed; }

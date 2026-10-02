@@ -16,7 +16,9 @@ obj TaskView {
         start_time: str = "",
         duration_minutes: int = 0,
         recurrence: str = "none",
-        occurrence_date: str = "";
+        occurrence_date: str = "",
+        item_type: str = "task",
+        due_time: str = "";
 }
 
 def _database_path -> str {
@@ -52,7 +54,9 @@ def _connect -> sqlite3.Connection {
         for (name, definition) in [
             ("start_time", "TEXT NOT NULL DEFAULT ''"),
             ("duration_minutes", "INTEGER NOT NULL DEFAULT 0"),
-            ("recurrence", "TEXT NOT NULL DEFAULT 'none'")
+            ("recurrence", "TEXT NOT NULL DEFAULT 'none'"),
+            ("item_type", "TEXT NOT NULL DEFAULT 'task'"),
+            ("due_time", "TEXT NOT NULL DEFAULT ''")
         ] {
             if name not in columns {
                 conn.execute(f"ALTER TABLE tasks ADD COLUMN {name} {definition}");
@@ -77,7 +81,8 @@ def _to_view(row: sqlite3.Row, occurrence_date: str, done: bool) -> TaskView {
         id=str(row["id"]), title=str(row["title"]),
         due_date=str(row["due_date"]), priority=str(row["priority"]), done=done,
         start_time=str(row["start_time"]), duration_minutes=int(row["duration_minutes"]),
-        recurrence=str(row["recurrence"]), occurrence_date=occurrence_date
+        recurrence=str(row["recurrence"]), occurrence_date=occurrence_date,
+        item_type=str(row["item_type"]), due_time=str(row["due_time"])
     );
 }
 
@@ -111,8 +116,8 @@ def _clean_priority(priority: str) -> str {
 
 def _clean_time(start_time: str) -> str {
     cleaned = start_time.strip();
-    if cleaned and re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", cleaned) is None {
-        raise ValueError("Start time must be HH:MM in 24-hour time");
+    if cleaned and re.fullmatch(r"(?:(?:[01][0-9]|2[0-3]):[0-5][0-9]|24:00)", cleaned) is None {
+        raise ValueError("Start time must be HH:MM from 00:00 to 24:00");
     }
     return cleaned;
 }
@@ -198,7 +203,8 @@ def _sort_day(tasks: list[TaskView]) {
 
 def:pub add_task(
     title: str, due_date: str = "", priority: str = "medium",
-    start_time: str = "", duration_minutes: str | int = 0, recurrence: str = "none"
+    start_time: str = "", duration_minutes: str | int = 0, recurrence: str = "none",
+    item_type: str = "task", due_time: str = ""
 ) -> TaskView {
     clean_title = _clean_title(title);
     clean_date = _clean_due_date(due_date);
@@ -206,6 +212,19 @@ def:pub add_task(
     clean_time = _clean_time(start_time);
     clean_duration = _clean_duration(duration_minutes);
     clean_recurrence = _clean_recurrence(recurrence);
+    clean_type = item_type.strip().lower();
+    clean_due_time = _clean_time(due_time);
+    if clean_type not in ["task", "deadline"] {
+        raise ValueError("Choose task or deadline");
+    }
+    if clean_type == "deadline" {
+        if not clean_date { raise ValueError("Choose a due date for your deadline or goal"); }
+        if clean_time or clean_duration or clean_recurrence != "none" {
+            raise ValueError("Deadlines use a due time, without a start time, duration, or repeat schedule");
+        }
+    } elif clean_due_time {
+        raise ValueError("Due time is only available for deadlines or goals");
+    }
     if not clean_date and (clean_time or clean_recurrence != "none") {
         raise ValueError("Choose a date for a start time or recurring task");
     }
@@ -215,9 +234,9 @@ def:pub add_task(
         conn.execute("BEGIN IMMEDIATE");
         conn.execute(
             "INSERT INTO tasks (id, title, due_date, priority, done, start_time, "
-            "duration_minutes, recurrence) VALUES (?, ?, ?, ?, 0, ?, ?, ?)",
+            "duration_minutes, recurrence, item_type, due_time) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?)",
             (task_id, clean_title, clean_date, clean_priority,
-             clean_time, clean_duration, clean_recurrence)
+             clean_time, clean_duration, clean_recurrence, clean_type, clean_due_time)
         );
         conn.commit();
     } finally { conn.close(); }
@@ -229,8 +248,19 @@ def:pub add_task(
         id=task_id, title=clean_title, due_date=clean_date,
         priority=clean_priority, done=False, start_time=clean_time,
         duration_minutes=clean_duration, recurrence=clean_recurrence,
-        occurrence_date=occurrence
+        occurrence_date=occurrence, item_type=clean_type, due_time=clean_due_time
     );
+}
+
+def:pub deadline_reminders -> list[TaskView] {
+    conn = _connect();
+    try {
+        rows = conn.execute(
+            "SELECT * FROM tasks WHERE item_type = 'deadline' AND done = 0 "
+            "ORDER BY due_date, CASE WHEN due_time = '' THEN '24:00' ELSE due_time END, title, id"
+        ).fetchall();
+        return [_to_view(row, str(row["due_date"]), False) for row in rows];
+    } finally { conn.close(); }
 }
 
 def:pub list_tasks(plan_date: str = "") -> list[TaskView] {

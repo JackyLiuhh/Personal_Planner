@@ -8,9 +8,11 @@ impl app.refresh -> None {
     try {
         fresh_tasks = await list_tasks(plan_date=requested_date);
         fresh_day_tasks = await day_plan(plan_date=requested_date);
+        fresh_reminders = await deadline_reminders();
         if current_request == requestRef.current {
             tasks = fresh_tasks;
             day_tasks = fresh_day_tasks;
+            reminders = fresh_reminders;
             error = "";
         }
     } except Exception as exc {
@@ -35,7 +37,10 @@ impl app.submitTask(e: FormEvent) -> None {
     busy = True;
     try {
         created = await add_task(title=title.strip(), due_date=due_date, priority=priority,
-            start_time=start_time, duration_minutes=duration if duration else 0, recurrence=recurrence);
+            start_time=start_time if item_type == "task" else "",
+            duration_minutes=duration if duration and item_type == "task" else 0,
+            recurrence=recurrence if item_type == "task" else "none", item_type=item_type,
+            due_time=start_time if item_type == "deadline" else "");
         selected_date = created.occurrence_date if created.occurrence_date else selected_date;
         title = "";
         due_date = selected_date;

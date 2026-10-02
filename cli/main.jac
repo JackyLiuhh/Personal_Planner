@@ -12,6 +12,7 @@ import from server.main {
     list_tasks,
     today_plan,
     day_plan,
+    deadline_reminders,
     set_done,
     delete_task
 }
@@ -37,7 +38,7 @@ def parse_time(value: str) -> str {
     if not value {
         return "";
     }
-    if re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", value) {
+    if re.fullmatch(r"(?:(?:[01][0-9]|2[0-3]):[0-5][0-9]|24:00)", value) {
         return value;
     }
     raise argparse.ArgumentTypeError("Use 24-hour HH:MM for --time (for example, 14:30).");
@@ -66,6 +67,7 @@ def build_parser -> argparse.ArgumentParser {
 
     add = commands.add_parser("add", help="Add a task");
     add.add_argument("title", help="What needs to be done");
+    add.add_argument("--deadline", action="store_true", help="Add a deadline or goal; --due is required and --time is the due time");
     add.add_argument("--due", dest="due_date", type=parse_date, `default="", help="Task date or first recurring date (YYYY-MM-DD)");
     add.add_argument(
         "--priority", choices=["low", "medium", "high"], `default="medium",
@@ -85,6 +87,7 @@ def build_parser -> argparse.ArgumentParser {
         help="Filter by completion status"
     );
     commands.add_parser("today", help="Show today's open plan");
+    commands.add_parser("reminders", help="Show open deadlines and goals, earliest due first");
     day = commands.add_parser("day", help="Show a day's tasks, including completed tasks and the undated inbox");
     day.add_argument("plan_date", nargs="?", type=parse_date, `default="", help="Date in YYYY-MM-DD format (default: today)");
 
@@ -103,6 +106,10 @@ def build_parser -> argparse.ArgumentParser {
 def render_task(task: TaskView) -> str {
     mark = "[x]" if task.done else "[ ]";
     due = task.occurrence_date or task.due_date or "Undated inbox";
+    if task.item_type == "deadline" {
+        return f"{mark} {task.id}  {task.title}  (deadline / goal, due {due} " +
+            (task.due_time or "end of day") + f", {task.priority})";
+    }
     schedule = due + (" at " + task.start_time if task.start_time else ", no start time");
     duration = f"{task.duration_minutes} min" if task.duration_minutes else "duration not set";
     repeat = ", repeats " + task.recurrence if task.recurrence != "none" else "";
@@ -168,7 +175,13 @@ async def dispatch(args: argparse.Namespace) -> int {
             print("Add --due YYYY-MM-DD when using --time or --repeat.", file=sys.stderr);
             return 2;
         }
-        task = await add_task(title, args.due_date, args.priority, args.start_time, args.duration_minutes, args.recurrence);
+        if args.deadline and (not args.due_date or args.duration_minutes or args.recurrence != "none") {
+            print("Deadlines need --due and do not use --duration or --repeat. Use --time for the due time.", file=sys.stderr);
+            return 2;
+        }
+        task = await add_task(title, args.due_date, args.priority,
+            "" if args.deadline else args.start_time, args.duration_minutes, args.recurrence,
+            "deadline" if args.deadline else "task", args.start_time if args.deadline else "");
         print("Added " + render_task(task));
         return 0;
     }
@@ -184,6 +197,10 @@ async def dispatch(args: argparse.Namespace) -> int {
     }
     if args.command == "today" {
         show_day(await today_plan(), date.today().isoformat(), True);
+        return 0;
+    }
+    if args.command == "reminders" {
+        show_tasks(await deadline_reminders(), "No open deadlines or goals.");
         return 0;
     }
     if args.command == "day" {

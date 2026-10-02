@@ -7,6 +7,7 @@ import from server.main {
     add_task,
     list_tasks,
     day_plan,
+    deadline_reminders,
     set_done
 }
 import from .theme { C, styles }
@@ -31,6 +32,8 @@ def validDate(value: str) -> bool {
 
 def:pub app -> JsxElement {
     has tasks: list[TaskView] = [],
+        reminders: list[TaskView] = [],
+        itemType: str = "task",
         view: str = "day",
         selectedDay: str = todayDate(),
         dayInput: str = todayDate(),
@@ -59,8 +62,10 @@ def:pub app -> JsxElement {
         try {
             result = await day_plan(requestedDay) if requestedView == "day"
                 else await list_tasks(requestedDay);
+            freshReminders = await deadline_reminders();
             if requestRef.current == nextRequest {
                 tasks = result;
+                reminders = freshReminders;
             }
         } except BridgeError as e {
             if requestRef.current == nextRequest {
@@ -115,7 +120,7 @@ def:pub app -> JsxElement {
             return;
         }
         minutes = 0;
-        if duration.strip() {
+        if duration.strip() and itemType == "task" {
             if not duration.strip().isdigit() {
                 error = "Expected duration must be a whole number of minutes.";
                 return;
@@ -126,7 +131,7 @@ def:pub app -> JsxElement {
                 return;
             }
         }
-        if (recurrence != "none" or startTime.strip()) and not dueDate.strip() {
+        if (itemType == "deadline" or recurrence != "none" or startTime.strip()) and not dueDate.strip() {
             error = "Choose a date for a start time or a recurring task.";
             return;
         }
@@ -136,7 +141,9 @@ def:pub app -> JsxElement {
         submittedDay = dayRef.current;
         try {
             created = await add_task(draft.strip(), dueDate.strip(), priority,
-                startTime.strip(), minutes, recurrence);
+                startTime.strip() if itemType == "task" else "", minutes,
+                recurrence if itemType == "task" else "none", itemType,
+                startTime.strip() if itemType == "deadline" else "");
             draft = "";
             dueDate = dayRef.current or todayDate();
             priority = "medium";
@@ -181,6 +188,9 @@ def:pub app -> JsxElement {
         <StatusBar barStyle="light-content" backgroundColor={C.bg}/>
         <HomeScreen
             tasks={tasks}
+            reminders={reminders}
+            itemType={itemType}
+            onItemType={lambda (value: str) { itemType = value; }}
             view={view}
             selectedDay={selectedDay}
             dayInput={dayInput}
