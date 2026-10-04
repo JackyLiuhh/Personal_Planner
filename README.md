@@ -1,6 +1,8 @@
 # GoPlanner
 Student: Zhanhao Liu / zhanhaol
+
 UMID: 13899561
+
 Course: EECS 449 / CSE449-F26 — Assignment 1
 
 GoPlanner is a personal planner built with **Jac**, with a web interface, a mobile app, and a command-line interface backed by the same planning service and SQLite database. Organize one-time tasks, build recurring routines, estimate your daily workload, and keep deadlines and goals in sight.
