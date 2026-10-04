@@ -1,3 +1,7 @@
+Student: Zhanhao Liu / zhanhaol  
+UMID: 13899561  
+Course: EECS 449 / CSE449-F26 — Assignment 1
+
 # GoPlanner
 Student: Zhanhao Liu / zhanhaol
 
@@ -118,4 +122,3 @@ jac install
 If `.jac/python314` is also missing, create it first with `conda create -p .jac/python314 python=3.14 -y`.
 
 The `.jac/` directory contains dependencies and planning data and is ignored by Git. Keep it if you want your saved tasks and local runtime to remain available.
-
