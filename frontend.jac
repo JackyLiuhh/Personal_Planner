@@ -85,14 +85,14 @@ def:pub app -> JsxElement {
 
     <div className="app-shell">
         <header className="topbar">
-            <div className="brand"><span className="brand-mark">P</span><span>pace</span></div>
+            <div className="brand"><span className="brand-mark">G</span><span>GoPlanner</span></div>
             <span className="topbar-note">A little clarity for each day</span>
         </header>
         <main className="main-grid">
             <div className="content-column">
                 <section className="hero">
                     <p className="eyebrow">PERSONAL PLANNER</p>
-                    <h1>Make room for what matters.</h1>
+                    <h1>From what matters to what's next.</h1>
                     <p className="hero-copy">Give your tasks a time, build a routine, and see how your day adds up.</p>
                     <div className="stats" aria-label="Selected day summary">
                         <div className="stat"><strong>{str(len(scheduled))}</strong><span>scheduled tasks</span></div>

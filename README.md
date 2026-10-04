@@ -1,39 +1,78 @@
+# GoPlanner
 
-# Pace
+GoPlanner is a personal planner built with **Jac**, with a web interface, a mobile app, and a command-line interface backed by the same planning service and SQLite database. Organize one-time tasks, build recurring routines, estimate your daily workload, and keep deadlines and goals in sight.
 
-Pace is a personal task planner written in Jac. Its four apps use the same planning logic and project data:
+## Included features
 
-| Component | What it does |
-| --- | --- |
-| Server | Validates tasks and saves them in `.jac/data/planner.sqlite3` |
-| Web | Add dated or undated tasks, review Today/All/Completed, complete, reopen, and delete |
-| Mobile | Review Today or All, quickly add a task, complete or reopen, and refresh |
-| CLI | Add, list, view today, complete, reopen, and delete tasks |
+- **Tasks and priorities:** Create tasks with a title, an optional date, and low, medium, or high priority. Leave a task undated to keep it in your inbox. Complete and reopen tasks; delete tasks or entire recurring series through the web app or CLI.
+- **Daily planning:** Browse previous/next days, choose a specific date, or jump to Today. The day plan includes tasks scheduled for that date and undated inbox items, with timed tasks shown first. Completed items remain available to reopen.
+- **Time estimates:** Add an optional 24-hour start time and expected duration of 1–1440 minutes. Web and mobile show calculated time ranges, including ranges that cross midnight, and planned/remaining minutes. Daily totals exclude undated inbox estimates.
+- **Recurring routines:** Repeat tasks daily, on weekdays, weekly, or monthly. Complete or reopen each occurrence independently without changing future occurrences. Monthly schedules use the last day of a shorter month when necessary.
+- **Deadlines and goals:** Track a required due date and optional due time separately from scheduled work. Open reminders appear across all dates, earliest due first; web and mobile label them Upcoming, Due today, or Overdue. They stay in reminders until completed and do not add to planned minutes.
+- **Task views:** Web offers Day plan, All tasks, and Completed views; mobile offers Day plan and All tasks. All tasks shows each recurring series' next occurrence on or after the selected date. The web Completed view shows completed items for the selected day plus completed inbox tasks.
+- **CLI workflows:** Add tasks and deadlines, list by completion status, inspect a day's plan or today's open backlog, review reminders, complete/reopen occurrences, and delete tasks. Commands accept full task IDs or unique ID prefixes.
+- **Persistent data and validation:** Tasks and occurrence completions survive restarts. The server validates titles, dates, times, priorities, durations, and recurrence rules, and migrates older task schemas automatically. Web and mobile include refresh, loading, and error states, and ignore stale responses when switching days.
 
-Tasks have a title, optional `YYYY-MM-DD` due date, priority (`low`, `medium`, or `high`), and completion state. Today includes open tasks due today or earlier and undated inbox tasks.
+Times use the local 24-hour clock (`HH:MM`, including `24:00` for end of day). A start time or repeat schedule requires a task date. Deadlines use a due time and do not have a duration or repeat schedule. Reminders are displayed inside the app.
 
-## Run
+## Project structure
 
-From this folder, check that `jac --version` shows 0.37.23. If your shell says `jac: command not found`, run `export PATH="$HOME/.local/bin:$PATH"` first. Then run:
+| Component | Files | Role |
+| --- | --- | --- |
+| Web | `main.jac`, `frontend.jac`, `frontend.impl.jac`, `styles.css` | Browser agenda, task entry, time summaries, and reminders |
+| Mobile | `mobile/` | Native mobile interface and mobile browser preview |
+| CLI | `cli/main.jac` | Terminal commands that call the planning service |
+| Server | `server/main.jac` | Shared validation, recurrence, completion tracking, and SQLite storage |
+| Tests | `server/main.test.jac` | Server behavior, persistence, migration, and input validation |
+
+By default, data is stored in `.jac/data/planner.sqlite3`. Set `PLANNER_DB_PATH` on the server to use a different database file. Apps running from this project share the same database; refresh a view to load changes made through another interface.
+
+## Getting started
+
+Run these commands from the `planner/` directory using **Jac 0.37.23** (the version pinned in `jac.toml`):
 
 ```sh
+jac --version
 jac install
 jac run --dev planner
 ```
 
-Open the **App** URL printed by Jac. The **API** URL is for the CLI and mobile bridge. Jac may choose different ports if its usual ports are occupied.
+Open the **App** URL printed by Jac. The **API** URL is used by the CLI and mobile bridge. Ports may vary if the usual ones are occupied.
 
-In another terminal, point the CLI at the server app route. Replace `8002` with the port in the printed **API** URL:
+If your shell cannot find Jac, add its local installation to your path:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+### Command-line usage
+
+Keep the web/server process running. In another terminal, set the server route using the printed **API** URL; replace `8002` below with its port:
 
 ```sh
 export JAC_APP_SERVER_URL="http://127.0.0.1:8002/api/server"
-jac run cli -- add "Review lecture notes" --due 2026-10-01 --priority high
+
+# Add a scheduled task, a recurring routine, and a deadline.
+jac run cli -- add "Review lecture notes" --due 2026-10-05 --time 09:00 --duration 45 --priority high
+jac run cli -- add "Daily reading" --due 2026-10-05 --duration 30 --repeat daily
+jac run cli -- add "Submit project" --deadline --due 2026-10-09 --time 17:00
+
+# Review your plan and reminders.
+jac run cli -- day 2026-10-05
 jac run cli -- today
-jac run cli -- list
+jac run cli -- list --status open --date 2026-10-05
+jac run cli -- reminders
+
+# Use an ID (or unique prefix) shown by list.
 jac run cli -- done TASK_ID
+jac run cli -- reopen TASK_ID
+jac run cli -- done RECURRING_TASK_ID --date 2026-10-05
+jac run cli -- delete TASK_ID
 ```
 
-`TASK_ID` can be a unique starting part of an ID shown by `list`.
+`day` shows the selected date's tasks, including completed items and the undated inbox. `today` shows open tasks due today or earlier plus open inbox tasks; its backlog total includes inbox estimates. For recurring tasks, pass `--date` to complete or reopen a specific occurrence; otherwise the next occurrence on or after today is used. `delete` removes the entire recurring series.
+
+### Mobile app
 
 For a mobile browser preview, stop the web preview and run:
 
@@ -41,9 +80,15 @@ For a mobile browser preview, stop the web preview and run:
 jac run --dev --platform web mobile
 ```
 
-For an Android or iOS device/simulator, run `jac run --dev mobile`. Jac sets up Expo on first use. See [mobile/README.md](mobile/README.md) for platform prerequisites. The mobile preview starts its own local API process, but it uses the same Jac server module and SQLite file, so saved tasks remain in sync.
+For an Android or iOS device/simulator:
 
-## Verify
+```sh
+jac run --dev mobile
+```
+
+Jac sets up Expo on first native use. Android requires JDK 21 and the Android SDK; iOS requires Xcode on macOS. See [mobile/README.md](mobile/README.md) for mobile details. Run one preview at a time. The mobile preview starts its own local API process using the same server module and database.
+
+## Validation
 
 ```sh
 jac check --nowarn
@@ -52,9 +97,11 @@ jac build --as client planner
 jac build --platform web mobile
 ```
 
-The server's tests use temporary databases and leave your plan untouched. This example exposes task functions publicly for local use. Add authentication before deploying it to other users.
+Server tests use temporary databases and leave saved planning data untouched. They cover task lifecycle, shared persistence, invalid input, time boundaries, schema migration, recurrence (including month ends and leap years), independent occurrence completion, and deadline reminders.
 
-## Jac 0.37.23 on this Mac
+The current service exposes task functions publicly for local use. Add authentication before deploying it for other users.
+
+## Local environment troubleshooting
 
 The installed Jac binary's bundled Python fails while creating a project virtual environment. This workspace already has a working environment in `.jac/venv`. If you remove that venv, recreate it with the existing project Python before running `jac install`:
 

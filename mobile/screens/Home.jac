@@ -92,7 +92,7 @@ def:pub HomeScreen(
     >
         <View style={styles.header}>
             <Text style={styles.eyebrow}>YOUR PERSONAL PLANNER</Text>
-            <Text style={styles.title}>Pace</Text>
+            <Text style={styles.title}>GoPlanner</Text>
             <Text style={styles.subtitle}>
                 A clear place for what matters next.
             </Text>

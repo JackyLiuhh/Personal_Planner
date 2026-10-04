@@ -61,7 +61,7 @@ def parse_duration(value: str) -> int {
 def build_parser -> argparse.ArgumentParser {
     parser = argparse.ArgumentParser(
         prog="planner",
-        description="Add, review, and complete tasks in your shared Jac planner."
+        description="GoPlanner: add, review, and complete tasks in your shared Jac planner."
     );
     commands = parser.add_subparsers(dest="command", required=True);
 

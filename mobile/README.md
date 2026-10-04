@@ -1,4 +1,4 @@
-# Pace mobile app
+# GoPlanner mobile app
 
 The Jac mobile app uses `@jac/mobui` native views and calls public functions in
 `server.main`. Tasks created or completed on mobile are the same persistent tasks
@@ -19,6 +19,9 @@ The mobile screen supports:
   inbox estimates; All tasks totals include every displayed task.
 - An All tasks view with each recurring task's next occurrence on or after the
   selected date, plus complete, reopen, and refresh actions.
+- Deadlines and goals with a required due date and optional due time. Open reminders
+  stay visible across dates, ordered by due date/time, with Upcoming, Due today,
+  and Overdue labels. Complete a deadline directly from its reminder.
 - Loading and connection errors, with stale responses ignored when switching days.
 
 ## Run
